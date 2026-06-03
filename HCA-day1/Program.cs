@@ -83,8 +83,8 @@ internal class Program
 
         Console.WriteLine();
         Console.WriteLine("Remaining 990 records were generated but not displayed.");
+
+        Console.WriteLine("completed branch creation");
     }
 }
 
-
-// qwerty
