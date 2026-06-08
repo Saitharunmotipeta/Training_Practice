@@ -1,117 +1,134 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 
-// Table data
-const patients = ref([])
+// -------------------- DATA --------------------
+const departments = ref([])
 
-// Search inputs
-const city = ref('')
-const fullName = ref('')
+// filters
+const fromDate = ref('')
+const sortBy = ref('total') // 'total' | 'name'
 
-const searchDisabled = ref(false)
+// -------------------- API CALL --------------------
+const loadDashboard = async () => {
 
-const resultCount = computed(() => patients.value.length)
+  const url = new URL('https://localhost:7052/api/analytics/department-load')
 
-// Load all patients
-const loadPatients = async () => {
-
-  const response = await fetch(
-    'https://localhost:7052/api/patients'
-  )
-
-  patients.value = await response.json()
-}
-
-// Search patients
-const searchPatients = async () => {
-
-  searchDisabled.value = true   // 🔒 disable button
-
-  const url = new URL('https://localhost:7052/api/patients/search')
-
-  if (city.value) {
-    url.searchParams.append('city', city.value)
+  if (fromDate.value) {
+    url.searchParams.append('fromDate', fromDate.value)
   }
-
-  if (fullName.value) {
-    url.searchParams.append('fullName', fullName.value)
-  }
-
-  url.searchParams.append('isActive', true)
 
   const response = await fetch(url)
-
-  const data = await response.json()
-
-  patients.value = data
+  departments.value = await response.json()
 }
 
-// Reset filters
-const reset = () => {
+const busiestTotal = computed(() => {
+  if (!departments.value.length) return 0
+  return Math.max(...departments.value.map(d => d.total))
+})
 
-  city.value = ''
-  fullName.value = ''
-
-  searchDisabled.value = false   
-
-  loadPatients()
+const isBusiest = (d) => {
+  return d.total === busiestTotal.value
 }
 
+// -------------------- SORTED DATA --------------------
+const sortedDepartments = computed(() => {
+
+  return [...departments.value].sort((a, b) => {
+
+    if (sortBy.value === 'name') {
+      return a.departmentName.localeCompare(b.departmentName)
+    }
+
+    return b.total - a.total
+  })
+})
+
+// -------------------- GRAND TOTAL --------------------
+const grandTotal = computed(() => {
+
+  return departments.value.reduce((sum, d) => {
+    return {
+      inpatient: sum.inpatient + d.inpatient,
+      outpatient: sum.outpatient + d.outpatient,
+      ed: sum.ed + d.ed,
+      total: sum.total + d.total
+    }
+  }, { inpatient: 0, outpatient: 0, ed: 0, total: 0 })
+})
+
+// -------------------- INIT --------------------
 onMounted(() => {
-  loadPatients()
+  loadDashboard()
 })
 
 </script>
 
 <template>
 
-  <h1>CareBridge Patients</h1>
+  <h1>Department Load Dashboard</h1>
 
-  <p>City :</p>
-  <input type="text" v-model="city" />
+  <!-- FILTERS -->
+  <label>From Date:</label>
+  <input type="date" v-model="fromDate" />
 
-  <p>Full Name :</p>
-  <input type="text" v-model="fullName" />
-
-  <br><br>
-
-  <button
-    @click="searchPatients"
-    :disabled="searchDisabled">
-    Search
-  </button>
-
-  <button @click="reset">
-    Reset
+  <button @click="loadDashboard">
+    Apply
   </button>
 
   <br><br>
 
-  <!-- 🔥 RESULT COUNT -->
-  <p v-if="patients.length">
-    Showing {{ resultCount }} entrie(s)
-  </p>
+  <!-- SORT -->
+  <label>Sort By:</label>
 
-  <p v-else>
-    No results found
-  </p>
+  <select v-model="sortBy">
+    <option value="total">Total</option>
+    <option value="name">Department Name</option>
+  </select>
 
-  <table border="1">
+  <br><br>
+
+  <!-- TABLE -->
+  <table border="1" cellpadding="8">
 
     <tr>
-      <th>Patient Id</th>
-      <th>Full Name</th>
-      <th>City</th>
+      <th>Department</th>
+      <th>Inpatient</th>
+      <th>Outpatient</th>
+      <th>ED</th>
+      <th>Total</th>
     </tr>
 
-    <tr v-for="p in patients" :key="p.patientId">
+    <!-- DATA ROWS -->
+    <tr
+  v-for="d in sortedDepartments"
+  :key="d.departmentName"
+  :class="{ highlight: isBusiest(d) }">
 
-      <td>{{ p.patientId }}</td>
-      <td>{{ p.fullName }}</td>
-      <td>{{ p.city }}</td>
+      <td>{{ d.departmentName }}</td>
+      <td>{{ d.inpatient }}</td>
+      <td>{{ d.outpatient }}</td>
+      <td>{{ d.ed }}</td>
+      <td><b>{{ d.total }}</b></td>
+
+    </tr>
+
+    <!-- GRAND TOTAL ROW -->
+    <tr style="font-weight:bold; background:#f0f0f0">
+
+      <td>Grand Total</td>
+      <td>{{ grandTotal.inpatient }}</td>
+      <td>{{ grandTotal.outpatient }}</td>
+      <td>{{ grandTotal.ed }}</td>
+      <td>{{ grandTotal.total }}</td>
 
     </tr>
 
   </table>
 
 </template>
+
+<style scoped>
+.highlight {
+  background-color: red;
+}
+</style>

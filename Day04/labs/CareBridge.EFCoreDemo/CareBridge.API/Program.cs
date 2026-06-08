@@ -87,4 +87,36 @@ app.MapGet("/api/patients/search",
             .ToList();
     });
 
+app.MapGet("/api/analytics/department-load",
+    (DateTime? fromDate, CareBridgeScaffoldContext db) =>
+    {
+        var result =
+        (
+            from e in db.Encounters
+
+            where !fromDate.HasValue || e.AdmitDate >= fromDate.Value
+
+            join d in db.Departments
+                on e.DepartmentId equals d.DepartmentId
+
+            group e by d.Name into g
+
+            select new
+            {
+                departmentName = g.Key,
+
+                inpatient = g.Count(e => e.EncounterType == "INPATIENT"),
+                outpatient = g.Count(e => e.EncounterType == "OUTPATIENT"),
+                ed = g.Count(e => e.EncounterType == "ED"),
+
+                total =
+                    g.Count(e => e.EncounterType == "INPATIENT") +
+                    g.Count(e => e.EncounterType == "OUTPATIENT") +
+                    g.Count(e => e.EncounterType == "ED")
+            }
+        );
+
+        return result.ToList();
+    });
+
 app.Run();
